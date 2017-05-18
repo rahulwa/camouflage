@@ -50,6 +50,7 @@ For more example, see [examples](https://github.com/rahulwa/camouflage/tree/mast
 ## Features
 - supports regular HTTP proxy, HTTPS through CONNECT, and "hijacking" HTTPS connection using "Man in the Middle" style attack (thanks to goproxy).
 - requests and responses are fully customizable (thanks to goproxy).
+- send a tracking uuid with `X-Camouflage-Context` header on response.
 - proxy chaining with the help of any reverse proxy.
 - save/send requests and responses to nearly anywhere with the help of [fluentd](http://www.fluentd.org/). 
 - metrics exposures via [prometheus-client](https://github.com/prometheus/client_golang/).

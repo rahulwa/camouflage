@@ -28,7 +28,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/satori/go.uuid"
+	gouuid "github.com/satori/go.uuid"
 )
 
 type Config struct {
@@ -81,7 +81,7 @@ func init() {
 // Impletments proxy functionality.
 // If fluent is nil, then doesn't dump http request and response.
 // If redispool is nil, then doesn't publish on redis Channel for bad status.
-// It adds a uuid to request, to bind it to corresponding response.
+// It adds a uuid to request, to bind it to corresponding response and send it to client as a header on response.
 func Proxy(redispool *redis.Pool, fluent *fluent.Fluent) {
 	defer redispool.Close()
 	defer glog.Flush()
@@ -91,7 +91,7 @@ func Proxy(redispool *redis.Pool, fluent *fluent.Fluent) {
 
 	//This function "onRequstCommonFunc" is being executed for each http[s] requests.
 	onRequstCommonFunc := func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		id := uuid.NewV4()
+		id := gouuid.NewV4()
 		uuid := id.Bytes()
 		ctx.UserData = map[string][]byte{"uuid": uuid}
 		GoProxy.Tr = &http.Transport{Dial: forward(Conf.ReverseProxyServer, GoProxy)}
@@ -143,8 +143,8 @@ func Proxy(redispool *redis.Pool, fluent *fluent.Fluent) {
 			c.Do("PUBLISH", Conf.RedisControllerChannel, tmp)
 			c.Flush()
 		}
+		uuid := v["uuid"]
 		if fluent != nil {
-			uuid := v["uuid"]
 			rsp, e := httputil.DumpResponse(r, true)
 			if e != nil {
 				glog.Errorf("proxy: httpmessagedump: onresponse: %q", e)
@@ -153,6 +153,12 @@ func Proxy(redispool *redis.Pool, fluent *fluent.Fluent) {
 			glog.V(5).Infof("proxy: httpmessagedump: onresponse: %q", rsp)
 			go dumphttpResponse(uuid, fluent, rsp)
 		}
+		id, err := gouuid.FromBytes(uuid)
+		if err != nil {
+			glog.Error("proxy: proxy: unable to parse uuid")
+			return r
+		}
+		r.Header.Set("X-Camouflage-Context", id.String())
 		return r
 	})
 	//The Handler function provides a default handler to expose metrics to Prometheus Server
